@@ -1,0 +1,18 @@
+# PostgreSQL para desarrollo local.
+# Levantar: docker compose up -d
+services:
+  db:
+    image: postgres:16
+    container_name: warehouse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: warehouse
+      POSTGRES_USER: warehouse
+      POSTGRES_PASSWORD: warehouse
+    ports:
+      - "5432:5432"
+    volumes:
+      - warehouse-pgdata:/var/lib/postgresql/data
+
+volumes:
+  warehouse-pgdata:

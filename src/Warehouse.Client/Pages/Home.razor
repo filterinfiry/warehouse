@@ -1,0 +1,28 @@
+@page "/"
+
+<PageTitle>Gestión de Almacén</PageTitle>
+
+<div class="hero">
+    <h1>Gestión de Almacén</h1>
+    <p class="text-muted">Verificación de recepción y preparación de pedidos con código de barras.</p>
+</div>
+
+<div class="module-grid">
+    <div class="module-card">
+        <div class="module-icon">✓</div>
+        <h3>Verificación de recepción</h3>
+        <p>Comprueba que el pedido recibido es correcto: marca cada línea, anota observaciones y recoge las firmas del supervisor y del transportista.</p>
+        <a class="btn btn-primary" href="/orders?flow=verification">Empezar verificación</a>
+    </div>
+
+    <div class="module-card">
+        <div class="module-icon">▤</div>
+        <h3>Preparación de pedido</h3>
+        <p>Prepara el pedido escaneando códigos de barras. Cada escaneo válido marca el producto como cargado; te avisa si algo no pertenece al pedido.</p>
+        <a class="btn btn-primary" href="/orders?flow=picking">Empezar preparación</a>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="/orders" class="link-secondary">Ver todas las órdenes de carga →</a>
+</div>

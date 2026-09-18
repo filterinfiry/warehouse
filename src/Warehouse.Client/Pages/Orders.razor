@@ -1,0 +1,112 @@
+@page "/orders"
+@inject WarehouseApi Api
+@inject NavigationManager Nav
+
+<PageTitle>Órdenes de carga</PageTitle>
+
+<h1>Órdenes de carga</h1>
+<p class="text-muted">Importa una orden del sistema origen y elige el flujo a realizar.</p>
+
+@if (_loading)
+{
+    <p><em>Cargando…</em></p>
+}
+else if (_orders.Count == 0)
+{
+    <div class="alert alert-info">No hay órdenes disponibles en el origen.</div>
+}
+else
+{
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>Referencia</th>
+                <th>Cliente</th>
+                <th>Fecha</th>
+                <th class="text-center">Líneas</th>
+                <th class="text-center">Estado</th>
+                <th class="text-end">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var o in _orders)
+            {
+                <tr>
+                    <td><strong>@o.ExternalRef</strong></td>
+                    <td>@o.Customer</td>
+                    <td>@(o.OrderDate?.ToString("dd/MM/yyyy"))</td>
+                    <td class="text-center">@o.LineCount</td>
+                    <td class="text-center">
+                        @if (o.Imported)
+                        {
+                            <span class="badge bg-success">Importada</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Sin importar</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        @if (o.Imported && o.LocalId is Guid id)
+                        {
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => StartVerification(id)">Verificar</button>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => StartPicking(id)">Preparar</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-primary" disabled="@(_busy == o.ExternalRef)"
+                                    @onclick="() => Import(o.ExternalRef)">
+                                @(_busy == o.ExternalRef ? "Importando…" : "Importar")
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@code {
+    private List<OrderSummary> _orders = new();
+    private bool _loading = true;
+    private string? _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        try { _orders = await Api.ListOrdersAsync(); }
+        catch (Exception ex) { _error = "No se pudo contactar con la API: " + ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task Import(string externalRef)
+    {
+        _busy = externalRef; _error = null;
+        var order = await Api.ImportOrderAsync(externalRef);
+        if (order is null) _error = $"No se pudo importar {externalRef}.";
+        await Load();
+        _busy = null;
+    }
+
+    private async Task StartVerification(Guid loadOrderId)
+    {
+        var session = await Api.StartVerificationAsync(loadOrderId);
+        if (session is not null) Nav.NavigateTo($"/verification/{session.Id}");
+        else _error = "No se pudo iniciar la verificación.";
+    }
+
+    private async Task StartPicking(Guid loadOrderId)
+    {
+        var session = await Api.StartPickingAsync(loadOrderId);
+        if (session is not null) Nav.NavigateTo($"/picking/{session.Id}");
+        else _error = "No se pudo iniciar la preparación.";
+    }
+}

@@ -1,0 +1,24 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+[Dd]ebug/
+[Rr]elease/
+publish/
+*.dll
+*.pdb
+
+# Rider / VS
+.idea/
+.vs/
+.vscode/
+
+# Entorno / secretos
+appsettings.*.local.json
+*.env
+.env
+
+# SO
+.DS_Store
+Thumbs.db

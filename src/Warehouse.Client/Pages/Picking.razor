@@ -1,0 +1,203 @@
+@page "/picking/{Id:guid}"
+@inject WarehouseApi Api
+@inject NavigationManager Nav
+
+<PageTitle>Preparación de pedido</PageTitle>
+
+@if (_session is null)
+{
+    <p><em>Cargando…</em></p>
+}
+else
+{
+    <div class="page-head">
+        <div>
+            <h1>Preparación de pedido</h1>
+            <p class="text-muted mb-0">
+                Orden <strong>@_session.Order?.ExternalRef</strong> — @_session.Order?.Customer
+            </p>
+        </div>
+        <span class="badge @(_allLoaded ? "bg-success" : "bg-warning text-dark") fs-6">
+            @_loadedCount / @_session.Lines.Count líneas
+        </span>
+    </div>
+
+    @if (!_locked)
+    {
+        <div class="scan-bar">
+            <input @ref="_scanInput" class="form-control form-control-lg" placeholder="Escanea o teclea el código de barras…"
+                   @bind="_barcode" @bind:event="oninput" @onkeydown="OnScanKey" />
+            <button class="btn btn-primary btn-lg" @onclick="() => Scan()">Añadir</button>
+        </div>
+
+        @if (_lastScan is not null)
+        {
+            <div class="alert @ScanAlertClass(_lastScan.Outcome) py-2">@_lastScan.Message</div>
+        }
+    }
+
+    <table class="table align-middle mt-3">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th class="text-center">Progreso</th>
+                <th style="width:35%">Observación</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var l in _session.Lines)
+            {
+                <tr class="@RowClass(l.Status)">
+                    <td>
+                        <strong>@l.Description</strong>
+                        <div class="text-muted small">@l.ProductCode @(l.Barcode is null ? "" : $"· {l.Barcode}")</div>
+                    </td>
+                    <td class="text-center text-nowrap">
+                        <span class="fw-semibold">@l.LoadedQuantity.ToString("0.##") / @l.RequiredQuantity.ToString("0.##")</span>
+                        <span class="text-muted">@l.Unit</span>
+                        @if (l.Status == PickingLineStatus.Over) { <span class="badge bg-danger ms-1">Exceso</span> }
+                        else if (l.Status == PickingLineStatus.Loaded) { <span class="badge bg-success ms-1">✓</span> }
+                    </td>
+                    <td>
+                        <input class="form-control form-control-sm" placeholder="Observación…"
+                               value="@l.Observation" disabled="@_locked"
+                               @onchange="e => SaveLine(l, e.Value?.ToString())" />
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Observaciones</label>
+        <textarea class="form-control" rows="2" @bind="_observation" disabled="@_locked"></textarea>
+    </div>
+
+    @if (!_locked)
+    {
+        <div class="sign-grid">
+            <div>
+                <input class="form-control mb-1" placeholder="Nombre del preparador" @bind="_preparerName" />
+                <SignaturePad @ref="_preparerPad" Label="Firma del preparador" />
+            </div>
+        </div>
+
+        @if (!_allLoaded)
+        {
+            <div class="alert alert-warning mt-2">Aún quedan líneas sin completar. Puedes finalizar igualmente si procede.</div>
+        }
+
+        <div class="mt-3">
+            <button class="btn btn-success btn-lg" disabled="@_saving" @onclick="Complete">
+                @(_saving ? "Guardando…" : "Firmar y finalizar")
+            </button>
+        </div>
+    }
+    else
+    {
+        <div><label class="fw-semibold">Preparador:</label> @_session.PreparerName
+            @if (_session.PreparerSignature is not null) { <img class="sig-img" src="@_session.PreparerSignature" /> }
+        </div>
+    }
+
+    @if (_error is not null) { <div class="alert alert-danger mt-3">@_error</div> }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private PickingSession? _session;
+    private string? _barcode;
+    private ScanResponse? _lastScan;
+    private string? _observation;
+    private string? _preparerName;
+    private SignaturePad? _preparerPad;
+    private ElementReference _scanInput;
+    private bool _saving;
+    private bool _locked;
+    private bool _allLoaded;
+    private string? _error;
+
+    private int _loadedCount => _session?.Lines.Count(l => l.LoadedQuantity >= l.RequiredQuantity) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _session = await Api.GetPickingAsync(Id);
+        if (_session is not null)
+        {
+            _observation = _session.Observation;
+            _preparerName = _session.PreparerName;
+            _locked = _session.Status == SessionStatus.Completed;
+            _allLoaded = _session.Lines.All(l => l.LoadedQuantity >= l.RequiredQuantity);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_locked)
+            try { await _scanInput.FocusAsync(); } catch { /* aún no renderizado */ }
+    }
+
+    private async Task OnScanKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "Tab") await Scan();
+    }
+
+    private async Task Scan()
+    {
+        var code = _barcode?.Trim();
+        if (string.IsNullOrEmpty(code)) return;
+        _barcode = "";
+        _error = null;
+
+        var res = await Api.ScanAsync(Id, code);
+        if (res is null) { _error = "Fallo al escanear."; return; }
+
+        _lastScan = res;
+        _allLoaded = res.AllLoaded;
+
+        // Actualiza la línea afectada en memoria.
+        if (res.Line is not null && _session is not null)
+        {
+            var l = _session.Lines.FirstOrDefault(x => x.Id == res.Line.Id);
+            if (l is not null)
+            {
+                l.LoadedQuantity = res.Line.LoadedQuantity;
+                l.Status = res.Line.Status;
+            }
+        }
+        await _scanInput.FocusAsync();
+    }
+
+    private async Task SaveLine(PickingLine l, string? obs)
+    {
+        l.Observation = obs;
+        await Api.UpdatePickingLineAsync(Id, l.Id, l.LoadedQuantity, l.Observation);
+    }
+
+    private async Task Complete()
+    {
+        _saving = true; _error = null;
+        var sig = _preparerPad is null ? null : await _preparerPad.CaptureAsync();
+        var ok = await Api.CompletePickingAsync(Id, new CompletePickingRequest(_observation, _preparerName, sig));
+        if (ok) Nav.NavigateTo("/orders");
+        else _error = "No se pudo finalizar la preparación.";
+        _saving = false;
+    }
+
+    private static string RowClass(PickingLineStatus s) => s switch
+    {
+        PickingLineStatus.Loaded => "table-success",
+        PickingLineStatus.Over => "table-danger",
+        PickingLineStatus.Partial => "table-warning",
+        _ => ""
+    };
+
+    private static string ScanAlertClass(ScanOutcome o) => o switch
+    {
+        ScanOutcome.Matched => "alert-success",
+        ScanOutcome.OverQuantity => "alert-warning",
+        ScanOutcome.NotInOrder => "alert-danger",
+        _ => "alert-secondary"
+    };
+}
