@@ -1,4 +1,5 @@
-# PostgreSQL para desarrollo local.
+# PostgreSQL para desarrollo local (aislado).
+# Puerto host 5433 para NO chocar con el postgres del sistema (5432) ni con SN51.
 # Levantar: docker compose up -d
 services:
   db:
@@ -10,9 +11,12 @@ services:
       POSTGRES_USER: warehouse
       POSTGRES_PASSWORD: warehouse
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - warehouse-pgdata:/var/lib/postgresql/data
+    labels:
+      # Que el watchtower de SN51 no gestione este contenedor.
+      com.centurylinklabs.watchtower.enable: "false"
 
 volumes:
   warehouse-pgdata:

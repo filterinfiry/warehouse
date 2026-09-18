@@ -32,15 +32,25 @@ implementar la interfaz y cambiar el registro en `Program.cs`.
 ## Puesta en marcha (desarrollo)
 
 ```bash
-# 1. Base de datos
+# 1. Base de datos (PostgreSQL en el puerto 5433, aislado del postgres del sistema)
 docker compose up -d
 
 # 2. API (aplica migraciones al arrancar) -> https://localhost:7000/swagger
 dotnet run --project src/Warehouse.Api
 
-# 3. Cliente Blazor -> https://localhost:7100
+# 3. (opcional) Datos de ejemplo para pruebas funcionales
+docker exec -i warehouse-db psql -U warehouse -d warehouse < db/seed.sql
+
+# 4. Cliente Blazor -> https://localhost:7100
 dotnet run --project src/Warehouse.Client
 ```
+
+### Datos de ejemplo
+
+`db/seed.sql` inserta 6 órdenes de carga con sus líneas (31 en total), con códigos
+de barras EAN-13 reales para poder probar el escaneo tecleándolos. Es idempotente
+(se puede relanzar) y solo afecta a las órdenes de ejemplo (`external_ref` con prefijo
+`OC-2026-1`). No es una migración: no se aplica en producción.
 
 La cadena de conexión está en `src/Warehouse.Api/appsettings.json` (`ConnectionStrings:Postgres`)
 y la URL de la API que consume el cliente en `src/Warehouse.Client/wwwroot/appsettings.json`

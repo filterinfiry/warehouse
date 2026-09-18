@@ -95,6 +95,7 @@ public class OrderRepository
     {
         var imported = await ListImportedAsync(ct);
         var importedByRef = imported.ToDictionary(o => o.ExternalRef, StringComparer.OrdinalIgnoreCase);
+        var lineCounts = await LineCountsAsync(ct);
 
         var external = await _external.ListAsync(ct);
         var result = new List<OrderSummary>();
@@ -111,8 +112,20 @@ public class OrderRepository
 
         // Órdenes importadas que ya no aparecen en el origen externo.
         foreach (var o in imported.Where(o => !seen.Contains(o.ExternalRef)))
-            result.Add(new OrderSummary(o.ExternalRef, o.Customer, o.OrderDate, o.Lines.Count, true, o.Id));
+            result.Add(new OrderSummary(o.ExternalRef, o.Customer, o.OrderDate,
+                lineCounts.GetValueOrDefault(o.Id), true, o.Id));
 
         return result;
     }
+
+    /// <summary>Número de líneas por orden importada (una sola consulta agregada).</summary>
+    private async Task<Dictionary<Guid, int>> LineCountsAsync(CancellationToken ct)
+    {
+        using var conn = await _factory.OpenAsync(ct);
+        var rows = await conn.QueryAsync<LineCountRow>(
+            "select load_order_id, count(*)::int as cnt from load_order_lines group by load_order_id");
+        return rows.ToDictionary(r => r.LoadOrderId, r => r.Cnt);
+    }
+
+    private record LineCountRow(Guid LoadOrderId, int Cnt);
 }
