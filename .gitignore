@@ -22,3 +22,7 @@ appsettings.*.local.json
 # SO
 .DS_Store
 Thumbs.db
+
+# Snapshots de datos (se generan con db/export-db.sh; no versionar el volcado)
+db/warehouse_export.sql
+db/*.dump
