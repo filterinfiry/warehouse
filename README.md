@@ -21,13 +21,31 @@ Aplicación de gestión de almacén con dos módulos:
 | Compartido | DTOs y modelos de dominio           | `src/Warehouse.Shared`|
 | Datos      | PostgreSQL                          | migraciones en `src/Warehouse.Api/Migrations` |
 
-### Origen de datos externo (pendiente de decidir)
+### Origen de datos externo (web service)
 
-Las órdenes de carga provienen de **otro programa**. El medio (web service o lectura
-directa de BD) aún **no está decidido**, así que queda encapsulado tras la interfaz
-`IExternalOrderSource`. Ahora mismo hay una implementación de ejemplo
-(`MockExternalOrderSource`) con datos en memoria. Para conectar el origen real basta con
-implementar la interfaz y cambiar el registro en `Program.cs`.
+Las órdenes de carga provienen de **otro programa**, vía **web service (HTTP/JSON)**.
+Queda encapsulado tras la interfaz `IExternalOrderSource`, con dos implementaciones:
+
+- `HttpExternalOrderSource` — adaptador real, configurable por la sección `ExternalSource`
+  de `src/Warehouse.Api/appsettings.json` (`BaseUrl`, `ListPath`, `OrderPath`, `Auth`).
+- `MockExternalOrderSource` — datos de ejemplo en memoria, para desarrollar sin la API.
+
+La selección es automática: si `ExternalSource:BaseUrl` está configurado se usa el
+adaptador HTTP; si está vacío, se usa el mock. **Mientras no haya API, sigue el mock.**
+
+📄 **El contrato que debe cumplir el web service** (endpoints, campos, tipos, auth y
+ejemplos JSON) está en **[`docs/API-CONTRACT.md`](docs/API-CONTRACT.md)**.
+
+Resumen de los dos endpoints esperados:
+
+| Método | Ruta (por defecto)   | Devuelve |
+|--------|----------------------|----------|
+| GET    | `/orders`            | Array de órdenes `{ ref, customer, date, lineCount }` |
+| GET    | `/orders/{ref}`      | Orden con `lines[]` (cada línea: `barcode`, `quantity`, `description`, …); 404 si no existe |
+
+Mínimo imprescindible: `ref` de la orden + `lines`, y en cada línea `barcode` + `quantity`
++ `description`. Para activarlo cuando exista la API: rellenar la config `ExternalSource`
+y, si los nombres de campo difieren, ajustar los DTOs `Api*` de `HttpExternalOrderSource.cs`.
 
 ## Puesta en marcha (desarrollo)
 
