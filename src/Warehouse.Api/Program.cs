@@ -17,9 +17,42 @@ builder.Services.AddScoped<OrderRepository>();
 builder.Services.AddScoped<VerificationRepository>();
 builder.Services.AddScoped<PickingRepository>();
 
-// Origen externo de órdenes (web service o BD, aún por decidir).
-// Cambiar aquí la implementación cuando se decida el origen real.
-builder.Services.AddSingleton<IExternalOrderSource, MockExternalOrderSource>();
+// Origen externo de órdenes. Decidido: WEB SERVICE (HTTP/JSON).
+// Si "ExternalSource:BaseUrl" está configurado -> HttpExternalOrderSource; si no -> mock.
+builder.Services.Configure<ExternalSourceOptions>(
+    builder.Configuration.GetSection(ExternalSourceOptions.SectionName));
+
+var externalOptions = builder.Configuration
+    .GetSection(ExternalSourceOptions.SectionName).Get<ExternalSourceOptions>() ?? new();
+
+if (externalOptions.Enabled)
+{
+    builder.Services.AddHttpClient<IExternalOrderSource, HttpExternalOrderSource>(client =>
+    {
+        var baseUrl = externalOptions.BaseUrl!.EndsWith('/') ? externalOptions.BaseUrl! : externalOptions.BaseUrl + "/";
+        client.BaseAddress = new Uri(baseUrl);
+        client.Timeout = TimeSpan.FromSeconds(externalOptions.TimeoutSeconds);
+
+        var auth = externalOptions.Auth;
+        if (!string.IsNullOrWhiteSpace(auth.Value))
+        {
+            if (auth.Type.Equals("Bearer", StringComparison.OrdinalIgnoreCase))
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", auth.Value);
+            }
+            else if (auth.Type.Equals("ApiKey", StringComparison.OrdinalIgnoreCase)
+                     && !string.IsNullOrWhiteSpace(auth.HeaderName))
+            {
+                client.DefaultRequestHeaders.Add(auth.HeaderName, auth.Value);
+            }
+        }
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IExternalOrderSource, MockExternalOrderSource>();
+}
 
 // CORS para el cliente Blazor WASM en desarrollo.
 const string CorsPolicy = "wasm";
