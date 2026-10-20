@@ -7,8 +7,17 @@ depender de la versión del cliente psql del host.
 ## Ficheros
 - `001_...` (en `../src/Warehouse.Api/Migrations`) — esquema, aplicado por el migrador de la API.
 - `seed.sql` — datos de ejemplo iniciales.
-- `warehouse_export.sql` — **snapshot exportado** (esquema + datos) para llevar la BD a otra máquina.
+- `create-database.sql` — **crea la BD desde cero** (rol + base de datos + esquema + datos de ejemplo) en otra máquina, sin Docker. Reutiliza `001_init.sql` y `seed.sql`.
+- `warehouse_export.sql` — **snapshot exportado** (esquema + datos actuales) para llevar la BD a otra máquina.
 - `export-db.sh` / `import-db.sh` — generar y restaurar ese snapshot.
+
+## Crear la BD desde cero en otra máquina (sin Docker)
+Requiere `psql` y ejecutarlo como superusuario (p.ej. `postgres`). Desde la raíz del repo:
+```bash
+psql -U postgres -f db/create-database.sql          # con datos de ejemplo
+```
+Es idempotente (se puede relanzar). Para dejarla vacía, comenta la línea `\ir seed.sql`.
+Crea el rol/BD `warehouse` / `warehouse` que ya espera `src/Warehouse.Api/appsettings.json`.
 
 ## Exportar (desde esta máquina)
 ```bash
